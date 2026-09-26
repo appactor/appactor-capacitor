@@ -1,0 +1,80 @@
+{
+  "name": "appactor-capacitor",
+  "version": "0.1.0",
+  "description": "AppActor Capacitor SDK — server-authoritative in-app purchases, subscriptions, offerings, remote config and experiments for iOS and Android.",
+  "main": "dist/plugin.cjs.js",
+  "module": "dist/esm/index.js",
+  "types": "dist/esm/index.d.ts",
+  "unpkg": "dist/plugin.js",
+  "files": [
+    "android/src/main/",
+    "android/build.gradle",
+    "dist/",
+    "ios/Sources",
+    "ios/Tests",
+    "Package.swift",
+    "AppactorCapacitor.podspec"
+  ],
+  "author": "AppActor <dev@appactor.com> (https://appactor.com)",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/appactor/appactor-capacitor.git"
+  },
+  "bugs": {
+    "url": "https://github.com/appactor/appactor-capacitor/issues"
+  },
+  "homepage": "https://github.com/appactor/appactor-capacitor#readme",
+  "keywords": [
+    "capacitor",
+    "plugin",
+    "native",
+    "appactor",
+    "subscriptions",
+    "in-app-purchases",
+    "ios",
+    "android"
+  ],
+  "scripts": {
+    "build": "npm run clean && tsc && rollup -c rollup.config.mjs",
+    "clean": "rimraf ./dist",
+    "typecheck": "tsc -p tsconfig.test.json",
+    "test": "vitest run",
+    "lint": "eslint . && prettier --check .",
+    "fmt": "eslint . --fix && prettier --write .",
+    "verify": "npm run verify:web && npm run verify:ios && npm run verify:android",
+    "verify:web": "npm run typecheck && npm run lint && npm test && npm run build",
+    "verify:ios": "xcodebuild -scheme AppactorCapacitor -destination generic/platform=iOS -quiet && xcodebuild test -scheme AppactorCapacitor -destination \"platform=iOS Simulator,name=${IOS_SIMULATOR:-iPhone 17}\" -quiet",
+    "verify:android": "cd android && ./gradlew clean build test && cd ..",
+    "prepublishOnly": "npm run verify:web",
+    "version": "node scripts/sync-version.mjs && git add src/version.ts"
+  },
+  "peerDependencies": {
+    "@capacitor/core": "^8.0.0"
+  },
+  "capacitor": {
+    "ios": {
+      "src": "ios"
+    },
+    "android": {
+      "src": "android"
+    }
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "devDependencies": {
+    "@capacitor/android": "^8.5.2",
+    "@capacitor/core": "^8.5.2",
+    "@capacitor/ios": "^8.5.2",
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^24.13.6",
+    "eslint": "^10.11.0",
+    "prettier": "^3.9.9",
+    "rimraf": "^6.1.3",
+    "rollup": "^4.63.5",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.70.1",
+    "vitest": "^5.0.2"
+  }
+}

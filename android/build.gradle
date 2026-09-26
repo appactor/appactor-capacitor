@@ -1,0 +1,47 @@
+ext {
+    junitVersion = project.hasProperty('junitVersion') ? rootProject.ext.junitVersion : '4.13.2'
+    androidxAppCompatVersion = project.hasProperty('androidxAppCompatVersion') ? rootProject.ext.androidxAppCompatVersion : '1.7.1'
+}
+
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:8.13.0'
+    }
+}
+
+apply plugin: 'com.android.library'
+
+// Plain Java (no Kotlin Gradle plugin) and no targetSdk, so the same file builds under the AGP 8
+// of Capacitor 8 apps and the AGP 9 of Capacitor 9 apps.
+android {
+    namespace = 'com.appactor.capacitor'
+    compileSdk = project.hasProperty('compileSdkVersion') ? rootProject.ext.compileSdkVersion : 36
+    defaultConfig {
+        minSdkVersion project.hasProperty('minSdkVersion') ? rootProject.ext.minSdkVersion : 24
+    }
+    lint {
+        abortOnError = false
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_21
+        targetCompatibility JavaVersion.VERSION_21
+    }
+}
+
+repositories {
+    google()
+    mavenCentral()
+}
+
+dependencies {
+    implementation project(':capacitor-android')
+    implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
+    implementation 'com.appactor:appactor-plugin:2.3.15'
+    // Already on the runtime classpath through appactor-plugin; needed here to call its suspend entry point.
+    compileOnly 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0'
+    testImplementation "junit:junit:$junitVersion"
+}

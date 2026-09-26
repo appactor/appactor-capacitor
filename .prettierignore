@@ -1,0 +1,8 @@
+dist
+node_modules
+package-lock.json
+android
+ios
+example-app/android
+example-app/ios
+example-app/dist

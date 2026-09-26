@@ -1,0 +1,31 @@
+# node
+node_modules
+dist
+*.tgz
+
+# iOS
+.build
+/Packages
+Package.resolved
+xcuserdata/
+DerivedData/
+.swiftpm/
+Pods
+Podfile.lock
+.netrc
+
+# Android
+.gradle
+build
+local.properties
+*.iml
+.idea
+captures
+.externalNativeBuild
+.cxx
+
+# macOS
+.DS_Store
+
+# logs
+*.log
