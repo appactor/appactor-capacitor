@@ -1,6 +1,6 @@
 {
   "name": "appactor-capacitor",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "AppActor Capacitor SDK — server-authoritative in-app purchases, subscriptions, offerings, remote config and experiments for iOS and Android.",
   "main": "dist/plugin.cjs.js",
   "module": "dist/esm/index.js",

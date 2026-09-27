@@ -21,7 +21,7 @@ android {
     namespace = 'com.appactor.capacitor'
     compileSdk = project.hasProperty('compileSdkVersion') ? rootProject.ext.compileSdkVersion : 36
     defaultConfig {
-        minSdkVersion project.hasProperty('minSdkVersion') ? rootProject.ext.minSdkVersion : 24
+        minSdkVersion project.hasProperty('minSdkVersion') ? rootProject.ext.minSdkVersion : 26
     }
     lint {
         abortOnError = false
@@ -40,7 +40,7 @@ repositories {
 dependencies {
     implementation project(':capacitor-android')
     implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
-    implementation 'com.appactor:appactor-plugin:2.3.15'
+    implementation 'com.appactor:appactor-plugin:2.4.2'
     // Already on the runtime classpath through appactor-plugin; needed here to call its suspend entry point.
     compileOnly 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0'
     testImplementation "junit:junit:$junitVersion"

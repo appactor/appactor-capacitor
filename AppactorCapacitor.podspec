@@ -11,8 +11,8 @@ Pod::Spec.new do |s|
   s.author = package['author']
   s.source = { :git => 'https://github.com/appactor/appactor-capacitor.git', :tag => s.version.to_s }
   s.source_files = 'ios/Sources/**/*.{swift,h,m}'
-  s.ios.deployment_target = '15.0'
+  s.ios.deployment_target = '16.0'
   s.dependency 'Capacitor'
-  s.dependency 'AppActorPlugin', '0.1.13'
+  s.dependency 'AppActorPlugin', '0.2.1'
   s.swift_version = '5.9'
 end

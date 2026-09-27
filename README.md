@@ -6,15 +6,15 @@ remote config, experiments, customer attributes and attribution.
 The plugin is a thin bridge. The work is done by the native AppActor SDKs through the same plugin layer the Flutter and
 React Native SDKs use, so every AppActor SDK behaves the same way.
 
-|                      | Version                                                      |
-| -------------------- | ------------------------------------------------------------ |
-| Capacitor            | 8 (tested with 8.5.2)                                        |
-| iOS                  | 15+ (StoreKit 2)                                             |
-| Android              | minSdk 24 (Google Play Billing)                              |
-| iOS native layer     | `AppActorPlugin` 0.1.13 (Swift Package Manager or CocoaPods) |
-| Android native layer | `com.appactor:appactor-plugin` 2.3.15 (Maven Central)        |
+|                      | Version                                                     |
+| -------------------- | ----------------------------------------------------------- |
+| Capacitor            | 8 (tested with 8.5.2)                                       |
+| iOS                  | 16+ (StoreKit 2)                                            |
+| Android              | minSdk 26 (Google Play Billing)                             |
+| iOS native layer     | `AppActorPlugin` 0.2.1 (Swift Package Manager or CocoaPods) |
+| Android native layer | `com.appactor:appactor-plugin` 2.4.2 (Maven Central)        |
 
-Capacitor 9 (in alpha) requires iOS 16, one version above this release's iOS minimum; a later release will support it.
+Capacitor 9 is still in alpha. This release already has the iOS 16 minimum it needs; support comes once 9 is stable.
 
 ## Installation
 
@@ -201,19 +201,6 @@ call is sent, and iOS-only APIs called elsewhere throw `UnsupportedError`.
 - `getAppUserId()` returns `null` before `configure()`.
 - Await `reset()` before reloading or navigating the page, or before configuring from another WebView: the native SDK
   ignores a `configure()` that arrives while it resets, and only the page that called `reset()` knows to wait.
-- Android 7.x (API 24–25): the native AppActor SDK uses `java.time`, which those versions lack, so an app whose
-  `minSdkVersion` is below 26 must turn on core library desugaring in `android/app/build.gradle`:
-
-  ```groovy
-  android {
-      compileOptions {
-          coreLibraryDesugaringEnabled true
-      }
-  }
-  dependencies {
-      coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'
-  }
-  ```
 
 ## API overview
 
