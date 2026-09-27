@@ -93,8 +93,7 @@ public class AppActorCapacitorPlugin extends Plugin {
     private void claimEvents() {
         AppActorPlugin.INSTANCE.setActivity(getActivity());
         AppActorPlugin.INSTANCE.setEventListener(FAN_OUT);
-        // Installs the SDK's log handler too. On Android 7.x (API 24–25) the SDK's java.time use then needs core
-        // library desugaring in the app; see the README.
+        // Installs the SDK's log handler too.
         AppActorPlugin.INSTANCE.startEventListening();
     }
 

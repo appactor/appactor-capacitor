@@ -3,7 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "AppactorCapacitor",
-    platforms: [.iOS(.v15)],
+    platforms: [.iOS(.v16)],
     products: [
         .library(
             name: "AppactorCapacitor",
@@ -11,7 +11,7 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/ionic-team/capacitor-swift-pm.git", from: "8.0.0"),
-        .package(url: "https://github.com/appactor/appactor-ios.git", exact: "0.1.13")
+        .package(url: "https://github.com/appactor/appactor-ios.git", exact: "0.2.1")
     ],
     targets: [
         .target(
