@@ -12,7 +12,16 @@ import { currentPlatform, execute, isDevelopmentRuntime } from './bridge';
 import type { AppActorLogLevel, AppActorStoreCapability, AppActorSubscriptionReplacementMode } from './enums';
 import { AppActorIntegrationIdentifier, parseStoreCapability } from './enums';
 import { UnsupportedError } from './errors';
-import { AppActorEventStream, SDK_EVENTS, beginReset, endReset, setSdkLogMirroring } from './events';
+import {
+  AppActorEventStream,
+  SDK_EVENTS,
+  beginReset,
+  endReset,
+  hasCustomerInfoListeners,
+  replayCustomerInfo,
+  setSdkLogMirroring,
+  watchCustomerInfoDeliveries,
+} from './events';
 import type { JsonObject } from './internal/json';
 import { asBoolean, asStringArray, ensureRecord, isRecord, optionalInteger, optionalString } from './internal/json';
 import type { AppActorOffering, AppActorPackage, AppActorPlatformKeys } from './models';
@@ -256,6 +265,7 @@ export class AppActor {
     const asaOptions = this.stagedAsaOptions;
     this.stagedAsaOptions = undefined;
     const resets = this.resets;
+    const customerInfoArrived = watchCustomerInfoDeliveries();
 
     setSdkLogMirroring(isDevelopmentRuntime());
     try {
@@ -268,6 +278,31 @@ export class AppActor {
         this.stagedAsaOptions ??= asaOptions;
       }
       throw error;
+    }
+    await this.replayCustomerInfoIfMissed(customerInfoArrived, resets);
+  }
+
+  /**
+   * On a fresh launch native sends the first `customer_info_updated` before `configure` returns.
+   * A page loaded while native is already configured (a reload, or a new Android Activity in a
+   * live process) gets nothing from it: native ignores that configure. This hands the page's
+   * listeners the info native holds in memory instead (no network request), unless customer info
+   * reached the page meanwhile, which is at least as new. Native's empty placeholder (no user yet)
+   * isn't sent, as native doesn't send it either; a failure leaves configure() successful.
+   */
+  private async replayCustomerInfoIfMissed(customerInfoArrived: () => boolean, resets: number): Promise<void> {
+    // Checked first: a reset that overtook configure() would hold the read until it finishes.
+    if (customerInfoArrived() || resets !== this.resets || !hasCustomerInfoListeners()) {
+      return;
+    }
+    let info: JsonObject;
+    try {
+      info = await this.call(METHOD_NAMES.getCachedCustomerInfo);
+    } catch {
+      return;
+    }
+    if (!customerInfoArrived() && resets === this.resets && typeof info.app_user_id === 'string') {
+      replayCustomerInfo(info);
     }
   }
 

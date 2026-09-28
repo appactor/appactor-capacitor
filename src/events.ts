@@ -67,12 +67,7 @@ function decodePayload(json?: string): JsonObject | null {
   }
 }
 
-function dispatch(eventName: string, event: NativeEventEnvelope): void {
-  const listeners = listenersOf(eventName);
-  const payload = listeners.length > 0 ? decodePayload(event?.json) : null;
-  if (!payload) {
-    return;
-  }
+function notify(listeners: readonly PayloadListener[], payload: JsonObject): void {
   for (const listener of listeners) {
     try {
       listener(payload);
@@ -80,6 +75,41 @@ function dispatch(eventName: string, event: NativeEventEnvelope): void {
       console.error('[AppActor] An event listener threw:', error);
     }
   }
+}
+
+function dispatch(eventName: string, event: NativeEventEnvelope): void {
+  const listeners = listenersOf(eventName);
+  const payload = listeners.length > 0 ? decodePayload(event?.json) : null;
+  if (payload) {
+    notify(listeners, payload);
+  }
+}
+
+/*
+ * Customer info that reached this page, from native or replayed by configure(). A count, so each
+ * configure() can tell whether any arrived while it ran, however many overlap.
+ */
+let customerInfoDeliveries = 0;
+
+function receiveCustomerInfo(eventName: string, event: NativeEventEnvelope): void {
+  customerInfoDeliveries += 1;
+  dispatch(eventName, event);
+}
+
+/** Returns a check that tells whether customer info has reached this page since this call. */
+export function watchCustomerInfoDeliveries(): () => boolean {
+  const seen = customerInfoDeliveries;
+  return () => customerInfoDeliveries !== seen;
+}
+
+export function hasCustomerInfoListeners(): boolean {
+  return listenersOf(SDK_EVENTS.customerInfoUpdated).length > 0;
+}
+
+/** Hands customer info that native already had to this page's listeners, as if native had sent it. */
+export function replayCustomerInfo(payload: JsonObject): void {
+  customerInfoDeliveries += 1;
+  notify(listenersOf(SDK_EVENTS.customerInfoUpdated), payload);
 }
 
 /*
@@ -123,7 +153,7 @@ function subscribe(eventName: string, listener: PayloadListener): AppActorEventS
       void Promise.resolve().then(releaseHeldIntents);
     }
   } else {
-    register(eventName, dispatch);
+    register(eventName, eventName === SDK_EVENTS.customerInfoUpdated ? receiveCustomerInfo : dispatch);
   }
 
   return {

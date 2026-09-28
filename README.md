@@ -146,8 +146,11 @@ anything reaches native code.
 ## Events
 
 Subscriptions are synchronous; keep the handle and call `remove()` when you're done. An event reaches the listeners
-that exist when it arrives, and `configure()` emits the first `customer_info_updated`, so subscribe before
-`configure()` (or read the current state with `getCustomerInfo()`):
+that exist when it arrives, so subscribe before `configure()`. By the time `configure()` resolves, those
+`onCustomerInfoUpdated` listeners have received the current customer info, if the SDK has any: on a fresh launch from
+its first sync, and when the page loads into an app that is already running (a WebView reload, or a new Android
+Activity in a live process) from what the SDK already holds, because native is configured already and ignores the
+call. On a first launch offline nothing arrives until the SDK gets customer info; `getCustomerInfo()` fetches it.
 
 ```ts
 const subscription = AppActor.instance.onCustomerInfoUpdated.listen((info) => {
