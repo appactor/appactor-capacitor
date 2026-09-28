@@ -12,7 +12,7 @@ React Native SDKs use, so every AppActor SDK behaves the same way.
 | iOS                  | 16+ (StoreKit 2)                                            |
 | Android              | minSdk 26 (Google Play Billing)                             |
 | iOS native layer     | `AppActorPlugin` 0.2.1 (Swift Package Manager or CocoaPods) |
-| Android native layer | `com.appactor:appactor-plugin` 2.4.2 (Maven Central)        |
+| Android native layer | `com.appactor:appactor-plugin` 2.4.3 (Maven Central)        |
 
 Capacitor 9 is still in alpha. This release already has the iOS 16 minimum it needs; support comes once 9 is stable.
 

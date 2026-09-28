@@ -40,7 +40,7 @@ repositories {
 dependencies {
     implementation project(':capacitor-android')
     implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
-    implementation 'com.appactor:appactor-plugin:2.4.2'
+    implementation 'com.appactor:appactor-plugin:2.4.3'
     // Already on the runtime classpath through appactor-plugin; needed here to call its suspend entry point.
     compileOnly 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0'
     testImplementation "junit:junit:$junitVersion"
