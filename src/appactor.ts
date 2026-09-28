@@ -12,7 +12,16 @@ import { currentPlatform, execute, isDevelopmentRuntime } from './bridge';
 import type { AppActorLogLevel, AppActorStoreCapability, AppActorSubscriptionReplacementMode } from './enums';
 import { AppActorIntegrationIdentifier, parseStoreCapability } from './enums';
 import { UnsupportedError } from './errors';
-import { AppActorEventStream, SDK_EVENTS, beginReset, endReset, setSdkLogMirroring } from './events';
+import {
+  AppActorEventStream,
+  SDK_EVENTS,
+  beginReset,
+  endReset,
+  hasCustomerInfoListeners,
+  hasReceivedCustomerInfo,
+  replayCustomerInfo,
+  setSdkLogMirroring,
+} from './events';
 import type { JsonObject } from './internal/json';
 import { asBoolean, asStringArray, ensureRecord, isRecord, optionalInteger, optionalString } from './internal/json';
 import type { AppActorOffering, AppActorPackage, AppActorPlatformKeys } from './models';
@@ -199,6 +208,9 @@ export class AppActor {
   /** Counts resets, so a configure() that a reset overtakes leaves the next user's state alone. */
   private resets = 0;
 
+  /** configure() calls still running; the last one to finish decides on replaying customer info. */
+  private configuring = 0;
+
   private constructor(guard: symbol) {
     if (guard !== APP_ACTOR_SINGLETON_GUARD) {
       throw new Error('AppActor cannot be instantiated directly. Use AppActor.instance.');
@@ -258,6 +270,7 @@ export class AppActor {
     const resets = this.resets;
 
     setSdkLogMirroring(isDevelopmentRuntime());
+    this.configuring += 1;
     try {
       await this.call(METHOD_NAMES.configure, payload);
       if (asaOptions && currentPlatform() === 'ios' && resets === this.resets) {
@@ -268,6 +281,28 @@ export class AppActor {
         this.stagedAsaOptions ??= asaOptions;
       }
       throw error;
+    } finally {
+      this.configuring -= 1;
+    }
+    await this.replayCustomerInfoIfMissed(resets);
+  }
+
+  /**
+   * A page loaded while native is already configured (a reload, or a new Android Activity in a
+   * live process) gets no `customer_info_updated` from configure(): native ignores it. Its
+   * listeners get the info native holds in memory instead (no network request). Native's empty
+   * info (no `app_user_id`: nothing fetched for the current user yet) isn't replayed; on a first
+   * launch native sends nothing then either.
+   */
+  private async replayCustomerInfoIfMissed(resets: number): Promise<void> {
+    // Checked first: a reset that overtook configure() would hold the read until it finishes.
+    if (this.configuring > 0 || hasReceivedCustomerInfo() || resets !== this.resets || !hasCustomerInfoListeners()) {
+      return;
+    }
+    // A failed read leaves configure() successful: `{}` has no app_user_id.
+    const info = await this.call(METHOD_NAMES.getCachedCustomerInfo).catch((): JsonObject => ({}));
+    if (!hasReceivedCustomerInfo() && resets === this.resets && typeof info.app_user_id === 'string') {
+      replayCustomerInfo(info);
     }
   }
 

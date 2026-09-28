@@ -97,7 +97,8 @@ describe('AppActor Capacitor bridge', () => {
     const subscription = AppActor.instance.onCustomerInfoUpdated.listen(vi.fn());
     await AppActor.instance.configure('pk_test_123');
 
-    expect(order).toEqual(['addListener:customer_info_updated', 'configure']);
+    // This configure sent no customer info, so the wrapper then reads what native has.
+    expect(order).toEqual(['addListener:customer_info_updated', 'configure', 'get_cached_customer_info']);
     subscription.remove();
   });
 
@@ -633,5 +634,189 @@ describe('AppActor Capacitor bridge', () => {
     await settle();
 
     expect(listener).not.toHaveBeenCalled();
+  });
+
+  describe('first customer info', () => {
+    const current = { app_user_id: 'user_1', active_entitlement_keys: ['pro'] };
+
+    function customerInfoEvent(json: Record<string, unknown>): NativeEvent {
+      return { name: 'customer_info_updated', json: JSON.stringify(json) };
+    }
+
+    /** Native as a page loaded into a live process sees it: configure is ignored and sends nothing. */
+    function nativeAlreadyConfigured(cached: Record<string, unknown> = current): void {
+      mocks.execute.mockImplementation(async (method) =>
+        success(method === 'get_cached_customer_info' ? cached : null),
+      );
+    }
+
+    /** A fresh SDK with a customer info listener, subscribed before configure as the README says. */
+    async function loadListening() {
+      const { AppActor } = await loadSdk();
+      const listener = vi.fn();
+      AppActor.instance.onCustomerInfoUpdated.listen(listener);
+      return { AppActor, listener };
+    }
+
+    it('replays the info native holds when configure sends none, as after a reload', async () => {
+      nativeAlreadyConfigured();
+      const { AppActor, listener } = await loadListening();
+
+      await AppActor.instance.configure('pk_test_123');
+
+      expect(methodsCalled(mocks.execute)).toEqual(['configure', 'get_cached_customer_info']);
+      expect(listener).toHaveBeenCalledTimes(1);
+      expect(listener.mock.calls[0][0].appUserId).toBe('user_1');
+      expect(listener.mock.calls[0][0].hasActiveEntitlement('pro')).toBe(true);
+    });
+
+    it("doesn't read or repeat anything when configure sends the first info, as on a fresh launch", async () => {
+      mocks.execute.mockImplementation(async (method) => {
+        if (method === 'configure') {
+          emitNativeEvent(customerInfoEvent(current));
+        }
+        return success(null);
+      });
+      const { AppActor, listener } = await loadListening();
+
+      await AppActor.instance.configure('pk_test_123');
+
+      expect(methodsCalled(mocks.execute)).toEqual(['configure']);
+      expect(listener).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps an event that arrives ahead of the read over the read, which may be older', async () => {
+      mocks.execute.mockImplementation(async (method) => {
+        if (method !== 'get_cached_customer_info') {
+          return success(null);
+        }
+        emitNativeEvent(customerInfoEvent({ app_user_id: 'user_1', active_entitlement_keys: ['pro', 'plus'] }));
+        return success(current);
+      });
+      const { AppActor, listener } = await loadListening();
+
+      await AppActor.instance.configure('pk_test_123');
+
+      expect(listener).toHaveBeenCalledTimes(1);
+      expect(listener.mock.calls[0][0].hasActiveEntitlement('plus')).toBe(true);
+    });
+
+    it('replays once when two configures run at the same time', async () => {
+      nativeAlreadyConfigured();
+      const { AppActor, listener } = await loadListening();
+
+      await Promise.all([AppActor.instance.configure('pk_test_123'), AppActor.instance.configure('pk_test_123')]);
+
+      expect(methodsCalled(mocks.execute)).toEqual(['configure', 'configure', 'get_cached_customer_info']);
+      expect(listener).toHaveBeenCalledTimes(1);
+    });
+
+    it('leaves the replay to the last overlapping configure, as an ignored one returns early on Android', async () => {
+      const startup = deferred<string>();
+      let configures = 0;
+      mocks.execute.mockImplementation(async (method) => {
+        if (method === 'configure' && ++configures === 1) {
+          return startup.promise;
+        }
+        return success(method === 'get_cached_customer_info' ? current : null);
+      });
+      const { AppActor, listener } = await loadListening();
+
+      const starting = AppActor.instance.configure('pk_test_123');
+      await AppActor.instance.configure('pk_test_123');
+      expect(listener).not.toHaveBeenCalled();
+      emitNativeEvent(customerInfoEvent(current));
+      startup.resolve(success(null));
+      await starting;
+
+      expect(methodsCalled(mocks.execute)).toEqual(['configure', 'configure']);
+      expect(listener).toHaveBeenCalledTimes(1);
+    });
+
+    it("doesn't replay to a page that already has customer info", async () => {
+      nativeAlreadyConfigured();
+      const { AppActor, listener } = await loadListening();
+
+      await AppActor.instance.configure('pk_test_123');
+      await AppActor.instance.configure('pk_test_123');
+
+      expect(methodsCalled(mocks.execute)).toEqual(['configure', 'get_cached_customer_info', 'configure']);
+      expect(listener).toHaveBeenCalledTimes(1);
+    });
+
+    it("doesn't replay when native sent customer info before configure", async () => {
+      nativeAlreadyConfigured();
+      const { AppActor, listener } = await loadListening();
+
+      emitNativeEvent(customerInfoEvent(current));
+      await AppActor.instance.configure('pk_test_123');
+
+      expect(methodsCalled(mocks.execute)).toEqual(['configure']);
+      expect(listener).toHaveBeenCalledTimes(1);
+    });
+
+    it("doesn't replay native's empty info, which it holds before it has fetched the current user's", async () => {
+      nativeAlreadyConfigured({ entitlements: {}, active_entitlement_keys: [] });
+      const { AppActor, listener } = await loadListening();
+
+      await AppActor.instance.configure('pk_test_123');
+
+      expect(listener).not.toHaveBeenCalled();
+    });
+
+    it("doesn't read when nothing listens for customer info", async () => {
+      nativeAlreadyConfigured();
+      const { AppActor } = await loadSdk();
+
+      await AppActor.instance.configure('pk_test_123');
+
+      expect(methodsCalled(mocks.execute)).toEqual(['configure']);
+    });
+
+    it('leaves configure successful when the read fails', async () => {
+      mocks.execute.mockImplementation(async (method) =>
+        method === 'get_cached_customer_info'
+          ? JSON.stringify({ error: { code: 2001, message: 'Not configured' } })
+          : success(null),
+      );
+      const { AppActor, listener } = await loadListening();
+
+      await expect(AppActor.instance.configure('pk_test_123')).resolves.toBeUndefined();
+      expect(listener).not.toHaveBeenCalled();
+    });
+
+    it("skips the read when a reset overtakes configure, so configure doesn't wait for it", async () => {
+      const reset = deferred<string>();
+      mocks.execute.mockImplementation((method) =>
+        method === 'reset' ? reset.promise : Promise.resolve(success(current)),
+      );
+      const { AppActor, listener } = await loadListening();
+
+      const configured = AppActor.instance.configure('pk_test_123');
+      const resetting = AppActor.instance.reset();
+      await configured;
+
+      expect(methodsCalled(mocks.execute)).toEqual(['configure', 'reset']);
+      expect(listener).not.toHaveBeenCalled();
+      reset.resolve(success(null));
+      await resetting;
+    });
+
+    it('drops a read that a reset overtakes, since it holds the signed-out user', async () => {
+      const read = deferred<string>();
+      mocks.execute.mockImplementation((method) =>
+        method === 'get_cached_customer_info' ? read.promise : Promise.resolve(success(null)),
+      );
+      const { AppActor, listener } = await loadListening();
+
+      const configured = AppActor.instance.configure('pk_test_123');
+      await settle();
+      expect(methodsCalled(mocks.execute)).toEqual(['configure', 'get_cached_customer_info']);
+      const resetting = AppActor.instance.reset();
+      read.resolve(success(current));
+      await Promise.all([configured, resetting]);
+
+      expect(listener).not.toHaveBeenCalled();
+    });
   });
 });
