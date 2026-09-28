@@ -288,28 +288,19 @@ export class AppActor {
   }
 
   /**
-   * On a fresh launch native sends the first `customer_info_updated` before `configure` returns.
    * A page loaded while native is already configured (a reload, or a new Android Activity in a
-   * live process) gets nothing: native ignores that configure. If no customer info has reached
-   * the page yet, this hands its listeners the info native holds in memory (no network request).
-   *
-   * Overlapping configure() calls leave it to the last one to finish: on Android, one that native
-   * ignores returns before the startup's event. Native's empty info (no `app_user_id`: nothing
-   * fetched for the current user yet) isn't replayed; on a first launch native sends nothing
-   * then either, and the next fetch sends the real info. A failed read leaves configure() successful.
+   * live process) gets no `customer_info_updated` from configure(): native ignores it. Its
+   * listeners get the info native holds in memory instead (no network request). Native's empty
+   * info (no `app_user_id`: nothing fetched for the current user yet) isn't replayed; on a first
+   * launch native sends nothing then either.
    */
   private async replayCustomerInfoIfMissed(resets: number): Promise<void> {
     // Checked first: a reset that overtook configure() would hold the read until it finishes.
     if (this.configuring > 0 || hasReceivedCustomerInfo() || resets !== this.resets || !hasCustomerInfoListeners()) {
       return;
     }
-    let info: JsonObject;
-    try {
-      info = await this.call(METHOD_NAMES.getCachedCustomerInfo);
-    } catch {
-      return;
-    }
-    // Customer info that reached the page during the read wins: native sends every change after it.
+    // A failed read leaves configure() successful: `{}` has no app_user_id.
+    const info = await this.call(METHOD_NAMES.getCachedCustomerInfo).catch((): JsonObject => ({}));
     if (!hasReceivedCustomerInfo() && resets === this.resets && typeof info.app_user_id === 'string') {
       replayCustomerInfo(info);
     }

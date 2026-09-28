@@ -101,7 +101,7 @@ export function hasReceivedCustomerInfo(): boolean {
 }
 
 export function hasCustomerInfoListeners(): boolean {
-  return listenersOf(SDK_EVENTS.customerInfoUpdated).length > 0;
+  return (listenersByEvent.get(SDK_EVENTS.customerInfoUpdated)?.size ?? 0) > 0;
 }
 
 /** Hands customer info that native already had to this page's listeners, as if native had sent it. */

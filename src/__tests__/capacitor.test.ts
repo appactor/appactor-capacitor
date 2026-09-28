@@ -650,11 +650,17 @@ describe('AppActor Capacitor bridge', () => {
       );
     }
 
-    it('replays the info native holds when configure sends none, as after a reload', async () => {
-      nativeAlreadyConfigured();
+    /** A fresh SDK with a customer info listener, subscribed before configure as the README says. */
+    async function loadListening() {
       const { AppActor } = await loadSdk();
       const listener = vi.fn();
       AppActor.instance.onCustomerInfoUpdated.listen(listener);
+      return { AppActor, listener };
+    }
+
+    it('replays the info native holds when configure sends none, as after a reload', async () => {
+      nativeAlreadyConfigured();
+      const { AppActor, listener } = await loadListening();
 
       await AppActor.instance.configure('pk_test_123');
 
@@ -671,9 +677,7 @@ describe('AppActor Capacitor bridge', () => {
         }
         return success(null);
       });
-      const { AppActor } = await loadSdk();
-      const listener = vi.fn();
-      AppActor.instance.onCustomerInfoUpdated.listen(listener);
+      const { AppActor, listener } = await loadListening();
 
       await AppActor.instance.configure('pk_test_123');
 
@@ -689,9 +693,7 @@ describe('AppActor Capacitor bridge', () => {
         emitNativeEvent(customerInfoEvent({ app_user_id: 'user_1', active_entitlement_keys: ['pro', 'plus'] }));
         return success(current);
       });
-      const { AppActor } = await loadSdk();
-      const listener = vi.fn();
-      AppActor.instance.onCustomerInfoUpdated.listen(listener);
+      const { AppActor, listener } = await loadListening();
 
       await AppActor.instance.configure('pk_test_123');
 
@@ -701,9 +703,7 @@ describe('AppActor Capacitor bridge', () => {
 
     it('replays once when two configures run at the same time', async () => {
       nativeAlreadyConfigured();
-      const { AppActor } = await loadSdk();
-      const listener = vi.fn();
-      AppActor.instance.onCustomerInfoUpdated.listen(listener);
+      const { AppActor, listener } = await loadListening();
 
       await Promise.all([AppActor.instance.configure('pk_test_123'), AppActor.instance.configure('pk_test_123')]);
 
@@ -720,9 +720,7 @@ describe('AppActor Capacitor bridge', () => {
         }
         return success(method === 'get_cached_customer_info' ? current : null);
       });
-      const { AppActor } = await loadSdk();
-      const listener = vi.fn();
-      AppActor.instance.onCustomerInfoUpdated.listen(listener);
+      const { AppActor, listener } = await loadListening();
 
       const starting = AppActor.instance.configure('pk_test_123');
       await AppActor.instance.configure('pk_test_123');
@@ -737,9 +735,7 @@ describe('AppActor Capacitor bridge', () => {
 
     it("doesn't replay to a page that already has customer info", async () => {
       nativeAlreadyConfigured();
-      const { AppActor } = await loadSdk();
-      const listener = vi.fn();
-      AppActor.instance.onCustomerInfoUpdated.listen(listener);
+      const { AppActor, listener } = await loadListening();
 
       await AppActor.instance.configure('pk_test_123');
       await AppActor.instance.configure('pk_test_123');
@@ -750,9 +746,7 @@ describe('AppActor Capacitor bridge', () => {
 
     it("doesn't replay when native sent customer info before configure", async () => {
       nativeAlreadyConfigured();
-      const { AppActor } = await loadSdk();
-      const listener = vi.fn();
-      AppActor.instance.onCustomerInfoUpdated.listen(listener);
+      const { AppActor, listener } = await loadListening();
 
       emitNativeEvent(customerInfoEvent(current));
       await AppActor.instance.configure('pk_test_123');
@@ -763,9 +757,7 @@ describe('AppActor Capacitor bridge', () => {
 
     it("doesn't replay native's empty info, which it holds before it has fetched the current user's", async () => {
       nativeAlreadyConfigured({ entitlements: {}, active_entitlement_keys: [] });
-      const { AppActor } = await loadSdk();
-      const listener = vi.fn();
-      AppActor.instance.onCustomerInfoUpdated.listen(listener);
+      const { AppActor, listener } = await loadListening();
 
       await AppActor.instance.configure('pk_test_123');
 
@@ -787,9 +779,7 @@ describe('AppActor Capacitor bridge', () => {
           ? JSON.stringify({ error: { code: 2001, message: 'Not configured' } })
           : success(null),
       );
-      const { AppActor } = await loadSdk();
-      const listener = vi.fn();
-      AppActor.instance.onCustomerInfoUpdated.listen(listener);
+      const { AppActor, listener } = await loadListening();
 
       await expect(AppActor.instance.configure('pk_test_123')).resolves.toBeUndefined();
       expect(listener).not.toHaveBeenCalled();
@@ -800,9 +790,7 @@ describe('AppActor Capacitor bridge', () => {
       mocks.execute.mockImplementation((method) =>
         method === 'reset' ? reset.promise : Promise.resolve(success(current)),
       );
-      const { AppActor } = await loadSdk();
-      const listener = vi.fn();
-      AppActor.instance.onCustomerInfoUpdated.listen(listener);
+      const { AppActor, listener } = await loadListening();
 
       const configured = AppActor.instance.configure('pk_test_123');
       const resetting = AppActor.instance.reset();
@@ -819,9 +807,7 @@ describe('AppActor Capacitor bridge', () => {
       mocks.execute.mockImplementation((method) =>
         method === 'get_cached_customer_info' ? read.promise : Promise.resolve(success(null)),
       );
-      const { AppActor } = await loadSdk();
-      const listener = vi.fn();
-      AppActor.instance.onCustomerInfoUpdated.listen(listener);
+      const { AppActor, listener } = await loadListening();
 
       const configured = AppActor.instance.configure('pk_test_123');
       await settle();
