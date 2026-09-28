@@ -86,20 +86,18 @@ function dispatch(eventName: string, event: NativeEventEnvelope): void {
 }
 
 /*
- * Customer info that reached this page, from native or replayed by configure(). A count, so each
- * configure() can tell whether any arrived while it ran, however many overlap.
+ * Whether customer info has reached this page, from native or replayed by configure(). Once it
+ * has, the page has a state, and native sends it every change after that.
  */
-let customerInfoDeliveries = 0;
+let customerInfoReceived = false;
 
 function receiveCustomerInfo(eventName: string, event: NativeEventEnvelope): void {
-  customerInfoDeliveries += 1;
+  customerInfoReceived = true;
   dispatch(eventName, event);
 }
 
-/** Returns a check that tells whether customer info has reached this page since this call. */
-export function watchCustomerInfoDeliveries(): () => boolean {
-  const seen = customerInfoDeliveries;
-  return () => customerInfoDeliveries !== seen;
+export function hasReceivedCustomerInfo(): boolean {
+  return customerInfoReceived;
 }
 
 export function hasCustomerInfoListeners(): boolean {
@@ -108,7 +106,7 @@ export function hasCustomerInfoListeners(): boolean {
 
 /** Hands customer info that native already had to this page's listeners, as if native had sent it. */
 export function replayCustomerInfo(payload: JsonObject): void {
-  customerInfoDeliveries += 1;
+  customerInfoReceived = true;
   notify(listenersOf(SDK_EVENTS.customerInfoUpdated), payload);
 }
 

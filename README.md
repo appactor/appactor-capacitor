@@ -150,7 +150,8 @@ that exist when it arrives, so subscribe before `configure()`. By the time `conf
 `onCustomerInfoUpdated` listeners have received the current customer info, if the SDK has any: on a fresh launch from
 its first sync, and when the page loads into an app that is already running (a WebView reload, or a new Android
 Activity in a live process) from what the SDK already holds, because native is configured already and ignores the
-call. On a first launch offline nothing arrives until the SDK gets customer info; `getCustomerInfo()` fetches it.
+call. When the SDK has no customer info for the current user yet (a first launch offline, or just after `logOut()` or
+`reset()` until it fetches the new user's), nothing arrives until it does; `getCustomerInfo()` fetches it.
 
 ```ts
 const subscription = AppActor.instance.onCustomerInfoUpdated.listen((info) => {

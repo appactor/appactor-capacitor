@@ -707,10 +707,61 @@ describe('AppActor Capacitor bridge', () => {
 
       await Promise.all([AppActor.instance.configure('pk_test_123'), AppActor.instance.configure('pk_test_123')]);
 
+      expect(methodsCalled(mocks.execute)).toEqual(['configure', 'configure', 'get_cached_customer_info']);
       expect(listener).toHaveBeenCalledTimes(1);
     });
 
-    it("doesn't replay native's empty placeholder, which native never sends", async () => {
+    it('leaves the replay to the last overlapping configure, as an ignored one returns early on Android', async () => {
+      const startup = deferred<string>();
+      let configures = 0;
+      mocks.execute.mockImplementation(async (method) => {
+        if (method === 'configure' && ++configures === 1) {
+          return startup.promise;
+        }
+        return success(method === 'get_cached_customer_info' ? current : null);
+      });
+      const { AppActor } = await loadSdk();
+      const listener = vi.fn();
+      AppActor.instance.onCustomerInfoUpdated.listen(listener);
+
+      const starting = AppActor.instance.configure('pk_test_123');
+      await AppActor.instance.configure('pk_test_123');
+      expect(listener).not.toHaveBeenCalled();
+      emitNativeEvent(customerInfoEvent(current));
+      startup.resolve(success(null));
+      await starting;
+
+      expect(methodsCalled(mocks.execute)).toEqual(['configure', 'configure']);
+      expect(listener).toHaveBeenCalledTimes(1);
+    });
+
+    it("doesn't replay to a page that already has customer info", async () => {
+      nativeAlreadyConfigured();
+      const { AppActor } = await loadSdk();
+      const listener = vi.fn();
+      AppActor.instance.onCustomerInfoUpdated.listen(listener);
+
+      await AppActor.instance.configure('pk_test_123');
+      await AppActor.instance.configure('pk_test_123');
+
+      expect(methodsCalled(mocks.execute)).toEqual(['configure', 'get_cached_customer_info', 'configure']);
+      expect(listener).toHaveBeenCalledTimes(1);
+    });
+
+    it("doesn't replay when native sent customer info before configure", async () => {
+      nativeAlreadyConfigured();
+      const { AppActor } = await loadSdk();
+      const listener = vi.fn();
+      AppActor.instance.onCustomerInfoUpdated.listen(listener);
+
+      emitNativeEvent(customerInfoEvent(current));
+      await AppActor.instance.configure('pk_test_123');
+
+      expect(methodsCalled(mocks.execute)).toEqual(['configure']);
+      expect(listener).toHaveBeenCalledTimes(1);
+    });
+
+    it("doesn't replay native's empty info, which it holds before it has fetched the current user's", async () => {
       nativeAlreadyConfigured({ entitlements: {}, active_entitlement_keys: [] });
       const { AppActor } = await loadSdk();
       const listener = vi.fn();
@@ -761,6 +812,25 @@ describe('AppActor Capacitor bridge', () => {
       expect(listener).not.toHaveBeenCalled();
       reset.resolve(success(null));
       await resetting;
+    });
+
+    it('drops a read that a reset overtakes, since it holds the signed-out user', async () => {
+      const read = deferred<string>();
+      mocks.execute.mockImplementation((method) =>
+        method === 'get_cached_customer_info' ? read.promise : Promise.resolve(success(null)),
+      );
+      const { AppActor } = await loadSdk();
+      const listener = vi.fn();
+      AppActor.instance.onCustomerInfoUpdated.listen(listener);
+
+      const configured = AppActor.instance.configure('pk_test_123');
+      await settle();
+      expect(methodsCalled(mocks.execute)).toEqual(['configure', 'get_cached_customer_info']);
+      const resetting = AppActor.instance.reset();
+      read.resolve(success(current));
+      await Promise.all([configured, resetting]);
+
+      expect(listener).not.toHaveBeenCalled();
     });
   });
 });
