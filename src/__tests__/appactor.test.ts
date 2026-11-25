@@ -25,6 +25,7 @@ import {
   appActorIntegrationIdentifierFromString,
   AppActorLogLevel,
   AppActorOptions,
+  AppActorOffering,
   AppActorOfferings,
   AppActorPackage,
   AppActorPackageType,
@@ -1612,5 +1613,302 @@ describe('AppActor Capacitor', () => {
     const AppActorConstructor = AppActor as unknown as new (...args: unknown[]) => AppActor;
 
     expect(() => new AppActorConstructor()).toThrow('AppActor cannot be instantiated directly. Use AppActor.instance.');
+  });
+
+  it('parses and normalizes package lookup_key without fallback', () => {
+    const keyed = testPackage({
+      store_product_id: 'store_monthly',
+      server_id: 'srv_monthly',
+      offering_id: 'off_main',
+      lookup_key: 'pro_monthly',
+    });
+    const padded = testPackage({ lookup_key: '  pro_annual \n\t ' });
+    const nullKey = testPackage({ lookup_key: null });
+    const omittedKey = testPackage({
+      store_product_id: 'store_monthly',
+      server_id: 'srv_monthly',
+      offering_id: 'off_main',
+    });
+    const emptyKey = testPackage({ lookup_key: '' });
+    const blankKey = testPackage({ lookup_key: '   \t\n ' });
+
+    expect(keyed.lookupKey).toBe('pro_monthly');
+    expect(padded.lookupKey).toBe('pro_annual');
+    expect(nullKey.lookupKey).toBeUndefined();
+    expect(omittedKey.lookupKey).toBeUndefined();
+    expect(emptyKey.lookupKey).toBeUndefined();
+    expect(blankKey.lookupKey).toBeUndefined();
+    expect(keyed.toPurchaseParams()).toEqual({
+      package_id: 'monthly',
+      store_product_id: 'store_monthly',
+      product_id: 'com.app.monthly',
+      product_type: 'subscription',
+      store: 'app_store',
+      offering_id: 'off_main',
+    });
+    expect(keyed.toJson()).toEqual(keyed.toPurchaseParams());
+    expect(() => testPackage({ lookup_key: 42 })).toThrow('lookup_key must be a string.');
+  });
+
+  it('keeps positional AppActorPackage constructor backward compatible and normalizes lookupKey', () => {
+    const minimal = new AppActorPackage('monthly', AppActorPackageType.Monthly, 'com.app.monthly');
+    const legacy20 = new AppActorPackage(
+      'monthly',
+      AppActorPackageType.Monthly,
+      'com.app.monthly',
+      'store_monthly',
+      AppActorProductType.Subscription,
+      AppActorStore.AppStore,
+      'base_plan',
+      'offer_1',
+      '$9.99',
+      9_990_000,
+      9.99,
+      'USD',
+      'Monthly',
+      'Pro Monthly',
+      'Monthly access',
+      { tier: 'pro' },
+      100,
+      1,
+      'srv_1',
+      'off_1',
+    );
+    const withPaddedKey = new AppActorPackage(
+      'monthly',
+      AppActorPackageType.Monthly,
+      'com.app.monthly',
+      undefined,
+      AppActorProductType.Subscription,
+      AppActorStore.AppStore,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      'off_1',
+      '  pro_monthly  ',
+    );
+    const withBlankKey = new AppActorPackage(
+      'monthly',
+      AppActorPackageType.Monthly,
+      'com.app.monthly',
+      undefined,
+      AppActorProductType.Subscription,
+      AppActorStore.AppStore,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      'off_1',
+      '   ',
+    );
+
+    expect(minimal.lookupKey).toBeUndefined();
+    expect(legacy20.offeringId).toBe('off_1');
+    expect(legacy20.lookupKey).toBeUndefined();
+    expect(withPaddedKey.lookupKey).toBe('pro_monthly');
+    expect(withBlankKey.lookupKey).toBeUndefined();
+
+    expect(testPackage({ lookup_key: 'pro_monthly' }).equals(testPackage({ lookup_key: '  pro_monthly  ' }))).toBe(
+      true,
+    );
+    expect(testPackage({ lookup_key: 'pro_monthly' }).equals(testPackage({ lookup_key: 'pro_annual' }))).toBe(false);
+    expect(testPackage({ lookup_key: 'pro_monthly' }).equals(testPackage())).toBe(false);
+    expect(testPackage().equals(testPackage({ lookup_key: null }))).toBe(true);
+    expect(testPackage().equals(testPackage({ lookup_key: '   ' }))).toBe(true);
+  });
+
+  it('packageForLookupKey performs strict case-sensitive exact match without fallback', () => {
+    const monthly = testPackage({
+      id: 'monthly',
+      package_type: 'monthly',
+      product_id: 'com.app.monthly',
+      store_product_id: 'store_monthly',
+      server_id: 'srv_monthly',
+      offering_id: 'off_main',
+      lookup_key: 'pro_monthly',
+    });
+    const annual = testPackage({
+      id: 'annual',
+      package_type: 'annual',
+      product_id: 'com.app.annual',
+      lookup_key: 'pro_annual',
+    });
+    const keyless = testPackage({
+      id: 'weekly',
+      package_type: 'weekly',
+      product_id: 'com.app.weekly',
+      store_product_id: 'store_weekly',
+      server_id: 'srv_weekly',
+      lookup_key: null,
+    });
+    const offering = new AppActorOffering('off_main', 'Main', true, 'main', undefined, [keyless, monthly, annual]);
+
+    expect(offering.packageForLookupKey('pro_monthly')).toBe(monthly);
+    expect(offering.packageForLookupKey('pro_annual')).toBe(annual);
+
+    // Case mismatch, empty, blank, whitespace-padded, unmatched, and non-string keys all reject strictly.
+    expect(offering.packageForLookupKey('PRO_MONTHLY')).toBeUndefined();
+    expect(offering.packageForLookupKey('Pro_Monthly')).toBeUndefined();
+    expect(offering.packageForLookupKey('')).toBeUndefined();
+    expect(offering.packageForLookupKey('   ')).toBeUndefined();
+    expect(offering.packageForLookupKey('\t\n')).toBeUndefined();
+    expect(offering.packageForLookupKey(' pro_monthly')).toBeUndefined();
+    expect(offering.packageForLookupKey('pro_monthly ')).toBeUndefined();
+    expect(offering.packageForLookupKey(' pro_monthly ')).toBeUndefined();
+    expect(offering.packageForLookupKey('\npro_monthly\t')).toBeUndefined();
+    expect(offering.packageForLookupKey('missing_key')).toBeUndefined();
+    expect(offering.packageForLookupKey(null as unknown as string)).toBeUndefined();
+    expect(offering.packageForLookupKey(undefined as unknown as string)).toBeUndefined();
+
+    // Never falls back to id, packageType, productId, storeProductId, serverId, offeringId, or first package.
+    expect(offering.packageForLookupKey('monthly')).toBeUndefined();
+    expect(offering.packageForLookupKey('annual')).toBeUndefined();
+    expect(offering.packageForLookupKey('weekly')).toBeUndefined();
+    expect(offering.packageForLookupKey('com.app.monthly')).toBeUndefined();
+    expect(offering.packageForLookupKey('com.app.weekly')).toBeUndefined();
+    expect(offering.packageForLookupKey('store_monthly')).toBeUndefined();
+    expect(offering.packageForLookupKey('store_weekly')).toBeUndefined();
+    expect(offering.packageForLookupKey('srv_monthly')).toBeUndefined();
+    expect(offering.packageForLookupKey('srv_weekly')).toBeUndefined();
+    expect(offering.packageForLookupKey('off_main')).toBeUndefined();
+
+    // Legacy keyless payload never resolves by any field or falls back to the first package.
+    const legacyOffering = AppActorOffering.fromJson({
+      id: 'legacy',
+      display_name: 'Legacy',
+      is_current: true,
+      packages: [
+        {
+          id: 'monthly',
+          package_type: 'monthly',
+          product_id: 'com.app.monthly',
+          product_type: 'subscription',
+          store: 'app_store',
+        },
+        {
+          id: 'annual',
+          package_type: 'annual',
+          product_id: 'com.app.annual',
+          product_type: 'subscription',
+          store: 'play_store',
+          lookup_key: null,
+        },
+      ],
+    });
+
+    expect(legacyOffering.packages[0].lookupKey).toBeUndefined();
+    expect(legacyOffering.packages[1].lookupKey).toBeUndefined();
+    expect(legacyOffering.packageForLookupKey('monthly')).toBeUndefined();
+    expect(legacyOffering.packageForLookupKey('annual')).toBeUndefined();
+    expect(legacyOffering.packageForLookupKey('com.app.monthly')).toBeUndefined();
+    expect(legacyOffering.packageForLookupKey('pro_monthly')).toBeUndefined();
+    expect(legacyOffering.packageForLookupKey('')).toBeUndefined();
+  });
+
+  it('carries package lookup_key through getOfferings and getCachedOfferings', async () => {
+    const wireOfferings = {
+      current: {
+        id: 'off_main',
+        display_name: 'Main',
+        is_current: true,
+        lookup_key: 'main',
+        packages: [
+          {
+            id: 'starter',
+            package_type: 'monthly',
+            product_id: 'com.app.starter',
+            product_type: 'subscription',
+            store: 'app_store',
+            lookup_key: '  starter_monthly  ',
+          },
+          {
+            id: 'annual',
+            package_type: 'annual',
+            product_id: 'com.app.annual',
+            product_type: 'subscription',
+            store: 'play_store',
+            lookup_key: 'pro_annual',
+          },
+          {
+            id: 'ios_keyless',
+            package_type: 'weekly',
+            product_id: 'com.app.weekly',
+            product_type: 'subscription',
+            store: 'app_store',
+          },
+          {
+            id: 'android_keyless',
+            package_type: 'lifetime',
+            product_id: 'com.app.lifetime',
+            product_type: 'non_consumable',
+            store: 'play_store',
+            lookup_key: null,
+          },
+        ],
+      },
+      all: {
+        off_main: {
+          id: 'off_main',
+          display_name: 'Main',
+          is_current: true,
+          lookup_key: 'main',
+          packages: [
+            {
+              id: 'starter',
+              package_type: 'monthly',
+              product_id: 'com.app.starter',
+              product_type: 'subscription',
+              store: 'app_store',
+              lookup_key: '  starter_monthly  ',
+            },
+            {
+              id: 'annual',
+              package_type: 'annual',
+              product_id: 'com.app.annual',
+              product_type: 'subscription',
+              store: 'play_store',
+              lookup_key: 'pro_annual',
+            },
+          ],
+        },
+      },
+      product_entitlements: {},
+      verification: 'verified',
+    };
+
+    mockExecute.mockResolvedValueOnce(success(wireOfferings)).mockResolvedValueOnce(success(wireOfferings));
+
+    const offerings = await AppActor.instance.getOfferings();
+    expect(offerings.current?.packageForLookupKey('starter_monthly')?.id).toBe('starter');
+    expect(offerings.current?.packageForLookupKey('pro_annual')?.id).toBe('annual');
+    expect(offerings.current?.packageForLookupKey('  starter_monthly  ')).toBeUndefined();
+    expect(offerings.current?.package('ios_keyless')?.lookupKey).toBeUndefined();
+    expect(offerings.current?.package('android_keyless')?.lookupKey).toBeUndefined();
+    expect(offerings.current?.packageForLookupKey('ios_keyless')).toBeUndefined();
+    expect(offerings.current?.packageForLookupKey('android_keyless')).toBeUndefined();
+
+    const cached = await AppActor.instance.getCachedOfferings();
+    expect(cached?.current?.packageForLookupKey('starter_monthly')?.lookupKey).toBe('starter_monthly');
+    expect(cached?.current?.packageForLookupKey('pro_annual')?.id).toBe('annual');
+    expect(cached?.current?.packageForLookupKey('starter')).toBeUndefined();
   });
 });
