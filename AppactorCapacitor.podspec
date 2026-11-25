@@ -13,6 +13,6 @@ Pod::Spec.new do |s|
   s.source_files = 'ios/Sources/**/*.{swift,h,m}'
   s.ios.deployment_target = '16.0'
   s.dependency 'Capacitor'
-  s.dependency 'AppActorPlugin', '0.2.1'
+  s.dependency 'AppActorPlugin', '0.2.2'
   s.swift_version = '5.9'
 end

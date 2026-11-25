@@ -507,7 +507,17 @@ export class AppActorCustomerInfo {
   }
 }
 
+function normalizeLookupKey(value?: string | null): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  return trimmed.length === 0 ? undefined : trimmed;
+}
+
 export class AppActorPackage {
+  public readonly lookupKey?: string;
+
   constructor(
     public readonly id: string,
     public readonly packageType: AppActorPackageType,
@@ -529,7 +539,10 @@ export class AppActorPackage {
     public readonly position?: number,
     public readonly serverId?: string,
     public readonly offeringId?: string,
-  ) {}
+    lookupKey?: string,
+  ) {
+    this.lookupKey = normalizeLookupKey(lookupKey);
+  }
 
   toPurchaseParams(): JsonObject {
     return {
@@ -574,6 +587,7 @@ export class AppActorPackage {
       optionalInteger(json.position, 'position'),
       optionalString(json.server_id, 'server_id'),
       optionalString(json.offering_id, 'offering_id'),
+      optionalString(json.lookup_key, 'lookup_key'),
     );
   }
 }
@@ -598,6 +612,19 @@ export class AppActorOffering {
 
   package(id: string): AppActorPackage | undefined {
     return this.packages.find((item) => item.id === id);
+  }
+
+  /**
+   * Returns the package with the exact given `lookupKey`, or `undefined`.
+   *
+   * Rejects empty, blank, or whitespace-padded keys and never falls back to
+   * `id`, `packageType`, `productId`, or another package.
+   */
+  packageForLookupKey(lookupKey: string): AppActorPackage | undefined {
+    if (typeof lookupKey !== 'string' || lookupKey.length === 0 || lookupKey.trim() !== lookupKey) {
+      return undefined;
+    }
+    return this.packages.find((item) => item.lookupKey === lookupKey);
   }
 
   packageFor(type: AppActorPackageType): AppActorPackage | undefined {
